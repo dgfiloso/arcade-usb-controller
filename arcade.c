@@ -28,24 +28,34 @@ SOFTWARE.
 
 void start_gpio(uint pin);
 
+static char event_str[128];
+static uint32_t valid_events[] = {GPIO_IRQ_LEVEL_LOW, GPIO_IRQ_LEVEL_HIGH, GPIO_IRQ_EDGE_FALL, GPIO_IRQ_EDGE_RISE};
+static uint32_t gpio_pin_values = 0;
+static uint8_t event_detected = 0;
+
+static char button_name[][10] = {"0", "1", "START", "A", "X", "L", "SELECT", "B", "Y", "R"};
+
+void gpio_event_string(char *buf, uint32_t events, uint gpio);
+
+void gpio_callback(uint gpio, uint32_t events) {
+    gpio_event_string(event_str, events, gpio);
+    printf("GPIO %d-%s %s\n", gpio, button_name[gpio], event_str);
+    event_detected = 1;
+}
+
 int main() 
 {
-#ifndef PICO_DEFAULT_LED_PIN
-#warning blink example requires a board with a regular LED
-#else
-    uint32_t gpio_pin_values;
-
     const uint LED_PIN = PICO_DEFAULT_LED_PIN;
     uint led_state = 1;
 
-    const uint BUTTON_A = 2;
-    const uint BUTTON_B = 3;
+    const uint BUTTON_A = 3;
+    const uint BUTTON_B = 7;
     const uint BUTTON_X = 4;
-    const uint BUTTON_Y = 5;
-    const uint BUTTON_L = 6;
-    const uint BUTTON_R = 7;
-    const uint BUTTON_START = 8;
-    const uint BUTTON_SELECT = 9;
+    const uint BUTTON_Y = 8;
+    const uint BUTTON_L = 5;
+    const uint BUTTON_R = 9;
+    const uint BUTTON_START = 2;
+    const uint BUTTON_SELECT = 6;
 
     const uint32_t BUTTON_A_MASK = 1 << BUTTON_A;
     const uint32_t BUTTON_B_MASK = 1 << BUTTON_B;
@@ -75,18 +85,21 @@ int main()
 
     while(1)
     {
-        gpio_pin_values = gpio_get_all();
+        if (event_detected)
+        {
+            printf("BUTTON A %d | B %d | X %d | Y %d | L %d | R %d | START %d | SELECT %d \n",
+                    (gpio_pin_values & BUTTON_A_MASK) == 0,
+                    (gpio_pin_values & BUTTON_B_MASK) == 0,
+                    (gpio_pin_values & BUTTON_X_MASK) == 0,
+                    (gpio_pin_values & BUTTON_Y_MASK) == 0,
+                    (gpio_pin_values & BUTTON_L_MASK) == 0,
+                    (gpio_pin_values & BUTTON_R_MASK) == 0,
+                    (gpio_pin_values & BUTTON_START_MASK) == 0,
+                    (gpio_pin_values & BUTTON_SELECT_MASK) == 0);
+            printf("--------------------\n\n");
+            event_detected = 0;
 
-        printf("GPIOs State : 0x%08X\n", gpio_pin_values);
-        printf("BUTTON A : %d\n", (gpio_pin_values & BUTTON_A_MASK) == 0);
-        printf("BUTTON B : %d\n", (gpio_pin_values & BUTTON_B_MASK) == 0);
-        printf("BUTTON X : %d\n", (gpio_pin_values & BUTTON_X_MASK) == 0);
-        printf("BUTTON Y : %d\n", (gpio_pin_values & BUTTON_Y_MASK) == 0);
-        printf("BUTTON L : %d\n", (gpio_pin_values & BUTTON_L_MASK) == 0);
-        printf("BUTTON R : %d\n", (gpio_pin_values & BUTTON_R_MASK) == 0);
-        printf("BUTTON START : %d\n", (gpio_pin_values & BUTTON_START_MASK) == 0);
-        printf("BUTTON SELECT : %d\n", (gpio_pin_values & BUTTON_SELECT_MASK) == 0);
-        printf("--------------------\n\n");
+        }
 
         gpio_put(LED_PIN, led_state);
         if (led_state == 1)
@@ -94,13 +107,49 @@ int main()
         else
             led_state = 1;
 
-        sleep_ms(500);
+        sleep_ms(100);
     }
-#endif
 }
 
 void start_gpio(uint pin) {
     gpio_init(pin);
     gpio_set_dir(pin, GPIO_IN);
     gpio_pull_up(pin);
+    gpio_set_irq_enabled_with_callback(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+}
+
+static const char *gpio_irq_str[] = {
+        "LEVEL_LOW",  // 0x1
+        "LEVEL_HIGH", // 0x2
+        "EDGE_FALL",  // 0x4
+        "EDGE_RISE"   // 0x8
+};
+
+void gpio_event_string(char *buf, uint32_t events, uint gpio) {
+    for (uint i = 0; i < 4; i++) {
+        uint mask = (1 << i);
+        if (events & mask) {
+            if (mask == GPIO_IRQ_EDGE_FALL)
+            {
+                gpio_pin_values &= ~(1 << gpio);
+            }
+            else if (mask == GPIO_IRQ_EDGE_RISE)
+            {
+                gpio_pin_values |= (1 << gpio);
+            }
+            // Copy this event string into the user string
+            const char *event_str = gpio_irq_str[i];
+            while (*event_str != '\0') {
+                *buf++ = *event_str++;
+            }
+            events &= ~mask;
+
+            // If more events add ", "
+            if (events) {
+                *buf++ = ',';
+                *buf++ = ' ';
+            }
+        }
+    }
+    *buf++ = '\0';
 }
