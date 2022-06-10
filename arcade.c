@@ -32,15 +32,22 @@ static char event_str[128];
 static uint32_t valid_events[] = {GPIO_IRQ_LEVEL_LOW, GPIO_IRQ_LEVEL_HIGH, GPIO_IRQ_EDGE_FALL, GPIO_IRQ_EDGE_RISE};
 static uint32_t gpio_pin_values = 0;
 static uint8_t event_detected = 0;
+static uint32_t last_detected = 0;
+static uint32_t timestamp_now = 0;
 
-static char button_name[][10] = {"0", "1", "START", "A", "X", "L", "SELECT", "B", "Y", "R"};
+static char button_name[][10] = {"0", "1", "START", "A", "X", "L", "SELECT", "B", "Y", "R", "UP", "DOWN", "RIGHT", "LEFT"};
 
 void gpio_event_string(char *buf, uint32_t events, uint gpio);
 
 void gpio_callback(uint gpio, uint32_t events) {
-    gpio_event_string(event_str, events, gpio);
-    printf("GPIO %d-%s %s\n", gpio, button_name[gpio], event_str);
-    event_detected = 1;
+    timestamp_now = to_ms_since_boot(get_absolute_time());
+    printf("Last detected %lld us , Now %lld us\n", last_detected, timestamp_now);
+    if ((timestamp_now - last_detected) > 100) {
+        gpio_event_string(event_str, events, gpio);
+        printf("GPIO %d-%s %s\n", gpio, button_name[gpio], event_str);
+        event_detected = 1;
+        last_detected = to_ms_since_boot(get_absolute_time());
+    }
 }
 
 int main() 
@@ -56,6 +63,10 @@ int main()
     const uint BUTTON_R = 9;
     const uint BUTTON_START = 2;
     const uint BUTTON_SELECT = 6;
+    const uint BUTTON_UP = 10;
+    const uint BUTTON_DOWN = 11;
+    const uint BUTTON_RIGHT = 12;
+    const uint BUTTON_LEFT = 13;
 
     const uint32_t BUTTON_A_MASK = 1 << BUTTON_A;
     const uint32_t BUTTON_B_MASK = 1 << BUTTON_B;
@@ -65,6 +76,10 @@ int main()
     const uint32_t BUTTON_R_MASK = 1 << BUTTON_R;
     const uint32_t BUTTON_START_MASK = 1 << BUTTON_START;
     const uint32_t BUTTON_SELECT_MASK = 1 << BUTTON_SELECT;
+    const uint32_t BUTTON_UP_MASK = 1 << BUTTON_UP;
+    const uint32_t BUTTON_DOWN_MASK = 1 << BUTTON_DOWN;
+    const uint32_t BUTTON_RIGHT_MASK = 1 << BUTTON_RIGHT;
+    const uint32_t BUTTON_LEFT_MASK = 1 << BUTTON_LEFT;
 
     stdio_init_all();
 
@@ -82,12 +97,16 @@ int main()
     start_gpio(BUTTON_R);
     start_gpio(BUTTON_START);
     start_gpio(BUTTON_SELECT);
+    start_gpio(BUTTON_UP);
+    start_gpio(BUTTON_DOWN);
+    start_gpio(BUTTON_RIGHT);
+    start_gpio(BUTTON_LEFT);
 
     while(1)
     {
         if (event_detected)
         {
-            printf("BUTTON A %d | B %d | X %d | Y %d | L %d | R %d | START %d | SELECT %d \n",
+            printf("BUTTON A %d | B %d | X %d | Y %d | L %d | R %d | START %d | SELECT %d | UP %d | DOWN %d | RIGHT %d | LEFT %d\n",
                     (gpio_pin_values & BUTTON_A_MASK) == 0,
                     (gpio_pin_values & BUTTON_B_MASK) == 0,
                     (gpio_pin_values & BUTTON_X_MASK) == 0,
@@ -95,7 +114,11 @@ int main()
                     (gpio_pin_values & BUTTON_L_MASK) == 0,
                     (gpio_pin_values & BUTTON_R_MASK) == 0,
                     (gpio_pin_values & BUTTON_START_MASK) == 0,
-                    (gpio_pin_values & BUTTON_SELECT_MASK) == 0);
+                    (gpio_pin_values & BUTTON_SELECT_MASK) == 0,
+                    (gpio_pin_values & BUTTON_UP_MASK) == 0,
+                    (gpio_pin_values & BUTTON_DOWN_MASK) == 0,
+                    (gpio_pin_values & BUTTON_RIGHT_MASK) == 0,
+                    (gpio_pin_values & BUTTON_LEFT_MASK) == 0);
             printf("--------------------\n\n");
             event_detected = 0;
 
